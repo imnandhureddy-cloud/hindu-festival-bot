@@ -10,7 +10,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 load_dotenv()
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN is missing.")
+
+if not CHANNEL_ID:
+    raise ValueError("CHANNEL_ID is missing.")
+
+CHANNEL_ID = int(CHANNEL_ID)
 
 intents = discord.Intents.default()
 
@@ -27,11 +35,13 @@ scheduler = AsyncIOScheduler()
 
 @bot.event
 async def on_ready():
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ Synced {len(synced)} commands")
+    except Exception as e:
+        print(f"❌ Command sync failed: {e}")
 
-    synced = await bot.tree.sync()
-
-    print(f"Synced {len(synced)} commands")
-    print(f"Logged in as {bot.user}")
+    print(f"✅ Logged in as {bot.user}")
 
     if not scheduler.running:
         scheduler.start()
@@ -39,22 +49,19 @@ async def on_ready():
 
 @bot.tree.command(
     name="today",
-    description="Today's festival"
+    description="Show today's Hindu festival"
 )
 async def today(interaction: discord.Interaction):
 
     today_date = datetime.now().strftime("%Y-%m-%d")
 
     if today_date in festivals:
-
         festival = festivals[today_date]
 
         await interaction.response.send_message(
-            f"🕉️ {festival['festival']}\n\n{festival['description']}"
+            f"🕉️ **{festival['festival']}**\n\n{festival['description']}"
         )
-
     else:
-
         await interaction.response.send_message(
             "🕉️ No major festival today."
         )
@@ -62,7 +69,7 @@ async def today(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="next",
-    description="Next upcoming festival"
+    description="Show the next upcoming Hindu festival"
 )
 async def next_festival(interaction: discord.Interaction):
 
@@ -71,7 +78,6 @@ async def next_festival(interaction: discord.Interaction):
     future = []
 
     for date_str, info in festivals.items():
-
         festival_date = datetime.strptime(
             date_str,
             "%Y-%m-%d"
@@ -83,18 +89,15 @@ async def next_festival(interaction: discord.Interaction):
     future.sort(key=lambda x: x[0])
 
     if future:
-
         date, info = future[0]
 
         await interaction.response.send_message(
-            f"📅 Next Festival\n\n"
-            f"{info['festival']}\n"
-            f"Date: {date.strftime('%d %B %Y')}\n\n"
+            f"📅 **Next Festival**\n\n"
+            f"🕉️ {info['festival']}\n"
+            f"📆 {date.strftime('%d %B %Y')}\n\n"
             f"{info['description']}"
         )
-
     else:
-
         await interaction.response.send_message(
             "No upcoming festivals found."
         )
@@ -104,8 +107,8 @@ async def send_daily_update():
 
     channel = bot.get_channel(CHANNEL_ID)
 
-    if not channel:
-        print("Channel not found")
+    if channel is None:
+        print(f"❌ Channel {CHANNEL_ID} not found.")
         return
 
     today_date = datetime.now().strftime("%Y-%m-%d")
@@ -128,10 +131,12 @@ async def send_daily_update():
 
         await channel.send(embed=embed)
 
+        print(f"✅ Posted festival update: {festival['festival']}")
+
 
 scheduler.add_job(
     send_daily_update,
-    "cron",
+    trigger="cron",
     hour=7,
     minute=0
 )
